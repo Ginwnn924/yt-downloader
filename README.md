@@ -59,18 +59,20 @@ python main.py
 3. Select quality and format
 4. Click **Download**
 
-### Login for Member Content
+### Login Methods
 
+#### Method 1: Google Login (Easiest)
 1. Click **Login with Google**
 2. A browser window will open for Google login
 3. After logging in, cookies are automatically captured
 4. Now you can download member-only videos!
 
-### Playlist Downloads
-
-1. Paste a playlist URL
-2. All videos in the playlist will be queued
-3. Downloads process one by one with progress tracking
+#### Method 2: Cookie Login (More Stable)
+1. Install [Cookie-Editor](https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm) extension
+2. Go to YouTube and ensure you are logged in
+3. Click the extension icon -> **Export** -> **Netscape**
+4. Open YT Downloader -> Login -> **Cookie** tab
+5. Paste the copied cookies and click **Import**
 
 ## 🛠️ Tech Stack
 
