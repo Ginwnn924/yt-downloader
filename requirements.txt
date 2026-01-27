@@ -1,0 +1,10 @@
+# GUI
+customtkinter>=5.2.0
+Pillow>=10.0.0
+
+# Video Download
+yt-dlp>=2024.1.0
+
+# Browser automation for login
+selenium>=4.15.0
+webdriver-manager>=4.0.0

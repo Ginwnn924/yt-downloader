@@ -1,0 +1,76 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Test/Coverage
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Logs
+*.log
+
+# Local config
+.env
+.env.local
+config/local.json
+
+# Downloaded videos
+downloads/
+*.mp4
+*.webm
+*.mkv
+*.mp3
+*.m4a
+
+# Agent folder
+.agent/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Cookies/Auth (sensitive)
+cookies.txt
+auth.json
