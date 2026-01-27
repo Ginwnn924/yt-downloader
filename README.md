@@ -8,19 +8,18 @@ A modern, cross-platform YouTube video downloader with a beautiful dark-themed U
 
 ## ✨ Features
 
-- 🎬 **Video & Playlist Downloads** - Download single videos or entire playlists
-- 🎵 **Audio Extraction** - Extract audio in MP3/M4A formats
-- 🔐 **Google Account Login** - Access member-only and age-restricted content
+- 🎬 **Comprehensive Download Support** - Download YouTube videos, playlists, and member-only videos
+- 🔐 **Login Methods** - Support **Login with Cookie** (Recommended) and **Login with Google**
 - 📊 **Multiple Quality Options** - Choose from available video/audio qualities
-- 🌙 **Beautiful Dark UI** - Modern glassmorphism design with smooth animations
-- 📁 **Custom Download Location** - Save videos wherever you want
-- 🔄 **Progress Tracking** - Real-time download progress with speed info
-- 🍪 **Cookie Import** - Manual cookie import for advanced users
 
 ## 📸 Screenshots
 
 <p align="center">
-  <img src="docs/screenshot.png" alt="YT Downloader Screenshot" width="600">
+  <img src="docs/screenshot1.png" alt="Main Interface" width="800">
+</p>
+<p align="center">
+  <img src="docs/screenshot2.png" alt="Download Progress" width="45%">
+  <img src="docs/screenshot3.png" alt="Settings & Login" width="45%">
 </p>
 
 ## 🚀 Installation
