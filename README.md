@@ -6,6 +6,9 @@ A modern, cross-platform YouTube video downloader with a beautiful dark-themed U
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 
+## Video demo: https://youtu.be/pYwknCUtxqs?si=dU6FLc3j0VPCYnRP
+
+
 ## ✨ Features
 
 - 🎬 **Comprehensive Download Support** - Download YouTube videos, playlists, and member-only videos

@@ -116,6 +116,9 @@ class Downloader:
             if self._progress_callback:
                 self._progress_callback(progress_info)
         
+            if self._cancel_requested:
+                raise ValueError("cancelled")
+        
         elif d.get("status") == "finished":
             if self._progress_callback:
                 self._progress_callback({"status": "processing", "percent": 100})

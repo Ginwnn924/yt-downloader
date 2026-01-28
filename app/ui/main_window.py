@@ -23,14 +23,14 @@ class MainWindow(ctk.CTkFrame):
         super().__init__(parent, fg_color=t["bg_app"], corner_radius=0)
         
         self._parent = parent
-        self._downloader: Downloader | None = None
         self._on_theme_toggle = on_theme_toggle
         
         # Download tracking
         self._pending_videos = []  # Videos loaded but not yet downloading
-        self._playlist_videos = []  # Videos currently downloading
-        self._current_playlist_index = 0
-        self._current_download_id = None
+        self._active_downloaders = {}
+        self._download_semaphore = threading.Semaphore(3)  # Limit concurrent downloads
+        self._task_context = {}
+        self._paused_ids = set()
         
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
@@ -96,8 +96,8 @@ class MainWindow(ctk.CTkFrame):
         # Right column
         self.progress_frame = ProgressFrame(
             content,
-            on_pause=lambda id: None,
-            on_resume=lambda id: None,
+            on_pause=self._pause_download,
+            on_resume=self._resume_download,
             on_cancel=self._cancel_download,
             on_retry=lambda id: None
         )
@@ -222,45 +222,53 @@ class MainWindow(ctk.CTkFrame):
         # Get quality and output dir
         quality_height = self.download_frame.get_quality_height()
         output_dir = self.download_frame.get_output_dir()
-        
         cookies = self.login_frame.get_cookies_path()
-        self._downloader = Downloader(output_dir=output_dir, cookies_file=cookies)
         
         format_str = f"bv*[height<={quality_height}]+ba/b[height<={quality_height}]" if quality_height else "bv*+ba/b"
         
-        self.download_frame.set_downloading(True)
-        
-        # Filter pending videos
-        self._playlist_videos = [v for v in self._pending_videos if v["id"] in pending_ids]
+        # Identify videos to start
+        videos_to_start = [v for v in self._pending_videos if v["id"] in pending_ids]
         self._pending_videos = [v for v in self._pending_videos if v["id"] not in pending_ids]
-        self._current_playlist_index = 0
         
-        # Start first download
-        self._download_next_pending(format_str)
-    
-    def _download_next_pending(self, format_str: str):
-        """Download next pending video."""
-        if self._current_playlist_index >= len(self._playlist_videos):
-            # All done
-            self.download_frame.set_downloading(False)
-            self.download_frame.set_pending_count(len(self.progress_frame.get_pending_ids()))
-            return
+        # Update pending count
+        self.download_frame.set_pending_count(len(self._pending_videos))
         
-        video = self._playlist_videos[self._current_playlist_index]
-        self._current_download_id = video["id"]
+        # Start all tasks
+        for video in videos_to_start:
+            self._start_download_task(video, format_str, output_dir, cookies)
+            
+    def _start_download_task(self, video, format_str, output_dir, cookies):
+        """Start a single download task in a separate thread."""
+        download_id = video["id"]
         
-        # Start this download
-        self.progress_frame.start_download(video["id"])
+        # Store context for resume
+        self._task_context[download_id] = {
+            "video": video,
+            "format_str": format_str,
+            "output_dir": output_dir,
+            "cookies": cookies
+        }
         
-        self._downloader.set_callbacks(
-            on_progress=lambda i: self._parent.after(0, lambda: self._on_progress(video["id"], i)),
-            on_complete=lambda f: self._parent.after(0, lambda: self._on_pending_done(video["id"], True, f, format_str)),
-            on_error=lambda e: self._parent.after(0, lambda: self._on_pending_done(video["id"], False, e, format_str))
+        # Create a dedicated downloader for this task
+        dl = Downloader(output_dir=output_dir, cookies_file=cookies)
+        self._active_downloaders[download_id] = dl
+        
+        self.progress_frame.start_download(download_id)
+        
+        dl.set_callbacks(
+            on_progress=lambda i: self._parent.after(0, lambda: self._on_progress(download_id, i)),
+            on_complete=lambda f: self._parent.after(0, lambda: self._on_task_done(download_id, True, f)),
+            on_error=lambda e: self._parent.after(0, lambda: self._on_task_done(download_id, False, e))
         )
         
-        def dl():
-            self._downloader.download_video(video["url"], format_str)
-        threading.Thread(target=dl, daemon=True).start()
+        def task():
+            # Wait for slot
+            with self._download_semaphore:
+                # Check directly if it was cancelled while waiting
+                if download_id in self._active_downloaders:
+                    dl.download_video(video["url"], format_str)
+        
+        threading.Thread(target=task, daemon=True).start()
     
     def _on_progress(self, download_id: str, info: dict):
         """Update progress for specific download."""
@@ -271,17 +279,50 @@ class MainWindow(ctk.CTkFrame):
             info.get("eta", "")
         )
     
-    def _on_pending_done(self, download_id: str, success: bool, msg: str, format_str: str):
-        """One pending video done, start next."""
+    def _on_task_done(self, download_id: str, success: bool, msg: str):
+        """Handle task completion."""
+        if download_id in self._paused_ids:
+            if download_id in self._active_downloaders:
+                del self._active_downloaders[download_id]
+            return
+
         self.progress_frame.complete_download(download_id, success, msg if not success else "")
         
-        # Move to next
-        self._current_playlist_index += 1
-        self._download_next_pending(format_str)
+        if download_id in self._task_context:
+            del self._task_context[download_id]
+            
+        if download_id in self._active_downloaders:
+            del self._active_downloaders[download_id]
     
     def _cancel_download(self, download_id: str):
-        """Cancel download."""
-        if self._downloader:
-            self._downloader.cancel()
+        """Cancel specific download."""
+        if download_id in self._paused_ids:
+            self._paused_ids.remove(download_id)
+        if download_id in self._task_context:
+            del self._task_context[download_id]
+            
+        if download_id in self._active_downloaders:
+            self._active_downloaders[download_id].cancel()
+            del self._active_downloaders[download_id]
         self.download_frame.set_downloading(False)
+
+    def _pause_download(self, download_id: str):
+        """Pause a download."""
+        if download_id in self._active_downloaders:
+            self._paused_ids.add(download_id)
+            self._active_downloaders[download_id].cancel()
+
+    def _resume_download(self, download_id: str):
+        """Resume a download."""
+        if download_id in self._paused_ids:
+            self._paused_ids.remove(download_id)
+        
+        if download_id in self._task_context:
+            ctx = self._task_context[download_id]
+            self._start_download_task(
+                ctx["video"],
+                ctx["format_str"],
+                ctx["output_dir"],
+                ctx["cookies"]
+            )
 
