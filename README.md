@@ -29,14 +29,7 @@ A modern YouTube video downloader with a beautiful dark-themed UI. Built with Py
 
 ## 🚀 Installation
 
-### Option 1: Download Pre-built Binary (Recommended)
-
-1. Download `YT-Downloader.exe` from [Releases](../../releases)
-2. Run it - no installation needed!
-
-> **Note**: Windows only. The app will automatically download yt-dlp.exe on first run.
-
-### Option 2: Run from Source
+### Run from Source
 
 ```bash
 # Clone the repository
@@ -50,10 +43,9 @@ pip install -r requirements.txt
 python main.py
 ```
 
-### Prerequisites (for running from source)
+### Prerequisites
 
 - Python 3.11 or higher
-- Windows 10/11
 
 ## 📖 Usage
 
@@ -84,14 +76,13 @@ python main.py
 The app automatically checks for yt-dlp updates on startup:
 - If a new version is available, an **Update** button appears in the header
 - Click it to update yt-dlp without restarting the app
-- Works for both development mode and pre-built exe
+- Works for development mode (updating via pip)
 
 ## 🛠️ Tech Stack
 
 - **GUI**: [CustomTkinter](https://github.com/TomSchimansky/CustomTkinter)
 - **Download Engine**: [yt-dlp](https://github.com/yt-dlp/yt-dlp)
 - **Browser Automation**: [Selenium](https://selenium-python.readthedocs.io/)
-- **Build**: [PyInstaller](https://pyinstaller.org/)
 
 ## 📁 Project Structure
 
@@ -110,22 +101,8 @@ yt-downloader/
 │       ├── download_frame.py
 │       ├── login_frame.py
 │       └── progress_frame.py
-├── requirements.txt
-└── .github/workflows/
-    └── release.yml        # CI/CD for releases
+└── requirements.txt
 ```
-
-## 🔧 Building from Source
-
-```bash
-# Install PyInstaller
-pip install pyinstaller
-
-# Build executable
-pyinstaller --noconfirm --onefile --windowed --name "YT-Downloader" main.py
-```
-
-The executable will be in the `dist/` folder.
 
 ## 🤝 Contributing
 
