@@ -46,7 +46,8 @@ python main.py
 ### Prerequisites
 
 - Python 3.11 or higher
-
+- ffmpeg (https://www.gyan.dev/ffmpeg/builds/)
+  
 ## 📖 Usage
 
 ### Basic Download
