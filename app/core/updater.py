@@ -97,7 +97,7 @@ class YtDlpUpdater:
             else:
                 # Development mode - use pip installed version
                 result = subprocess.run(
-                    ["yt-dlp", "--version"],
+                    [sys.executable, "-m", "yt_dlp", "--version"],
                     capture_output=True,
                     text=True,
                     timeout=10
@@ -249,7 +249,7 @@ class YtDlpUpdater:
         try:
             # Use pip directly - more reliable when installed via pip
             result = subprocess.run(
-                ["pip", "install", "--upgrade", "yt-dlp"],
+                [sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp"],
                 capture_output=True,
                 text=True,
                 timeout=120

@@ -174,34 +174,16 @@ class MainWindow(ctk.CTkFrame):
         if success:
             self.hide_update_button()
             new_version = get_updater().get_installed_version()
-            result = messagebox.askyesno(
+            messagebox.showinfo(
                 "Update Successful",
-                f"yt-dlp has been updated to v{new_version}!\n\n"
-                "Please restart the app for changes to take effect.\n\n"
-                "Restart now?",
-                icon="info"
+                f"yt-dlp has been updated to v{new_version}!"
             )
-            if result:
-                self._restart_app()
         else:
             self.update_btn.configure(text="🔄 Retry", state="normal")
             messagebox.showerror(
                 "Update Failed",
                 "Failed to update yt-dlp.\n\nPlease check your internet connection and try again."
             )
-    
-    def _restart_app(self):
-        """Restart the application."""
-        import sys
-        import os
-        
-        # Get the executable or script path
-        if getattr(sys, 'frozen', False):
-            # Running as exe
-            os.execl(sys.executable, sys.executable)
-        else:
-            # Running as script
-            os.execl(sys.executable, sys.executable, *sys.argv)
 
     # === Handlers ===
     

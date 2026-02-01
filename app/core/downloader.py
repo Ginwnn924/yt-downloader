@@ -18,12 +18,15 @@ except ImportError:
 from .updater import is_frozen, get_ytdlp_exe_path
 
 
-def _should_use_external_exe() -> bool:
-    """Check if we should use external yt-dlp.exe instead of bundled module."""
-    if is_frozen():
-        exe_path = get_ytdlp_exe_path()
-        return exe_path.exists()
-    return False
+import sys
+
+def _should_use_subprocess() -> bool:
+    """
+    Always use subprocess for yt-dlp interactions.
+    This ensures we always use the latest version after an update,
+    without needing to reload modules or restart the app.
+    """
+    return True
 
 
 class Downloader:
@@ -52,8 +55,8 @@ class Downloader:
         self._cancel_requested: bool = False
         self._current_process: Optional[subprocess.Popen] = None
         
-        # Check if we should use external exe
-        self._use_external = _should_use_external_exe()
+        # Always use subprocess
+        self._use_subprocess = _should_use_subprocess()
     
     def set_callbacks(
         self,
@@ -86,9 +89,9 @@ class Downloader:
             },
             # Retry and timeout
             "retries": 3,
-            "fragment_retries": 3,
+            "fragment_retries": 10,
             "socket_timeout": 30,
-            "extractor_retries": 2,
+            "extractor_retries": 3,
             # Output control
             "quiet": True,
             "no_warnings": True,
@@ -105,6 +108,7 @@ class Downloader:
             "noplaylist": False,
             "progress_hooks": [self._progress_hook],
             "postprocessor_hooks": [self._postprocessor_hook],
+            "ffmpeg_location": "ffmpeg" if not is_frozen() else None # Optional hint
         })
         
         if self.cookies_file:
@@ -170,14 +174,16 @@ class Downloader:
     
     # === Subprocess mode methods (for external yt-dlp.exe) ===
     
-    def _get_exe_path(self) -> str:
-        """Get path to yt-dlp executable."""
-        return str(get_ytdlp_exe_path())
-    
     def _build_cmd_args(self, url: str, format_str: str, extract_only: bool = False) -> list:
         """Build command line arguments for yt-dlp."""
-        exe = self._get_exe_path()
-        args = [exe]
+        
+        # Determine executable
+        if is_frozen():
+            exe = str(get_ytdlp_exe_path())
+            args = [exe]
+        else:
+            # Run via python module
+            args = [sys.executable, "-m", "yt_dlp"]
         
         if extract_only:
             args.extend(["-j", "--flat-playlist"])
@@ -337,8 +343,8 @@ class Downloader:
         Extract video/playlist info without downloading.
         Returns (info_dict, error_message). If error, info is None.
         """
-        # Use subprocess mode if external exe available
-        if self._use_external:
+        # Always use subprocess to ensure code is fresh
+        if self._use_subprocess:
             return self._get_video_info_subprocess(url)
         
         if not YoutubeDL:
@@ -422,8 +428,8 @@ class Downloader:
     
     def download_video(self, url: str, format_str: str = "bv*+ba/b") -> bool:
         """Download a single video."""
-        # Use subprocess mode if external exe available
-        if self._use_external:
+        # Use subprocess mode (preferred)
+        if self._use_subprocess:
             return self._download_video_subprocess(url, format_str)
         
         if not YoutubeDL:
