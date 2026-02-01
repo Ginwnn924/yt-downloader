@@ -10,20 +10,7 @@ permissions:
 
 jobs:
   build:
-    strategy:
-      matrix:
-        include:
-          - os: windows-latest
-            artifact_name: YT-Downloader-Windows.exe
-            build_name: yt-downloader.exe
-          - os: macos-latest
-            artifact_name: YT-Downloader-macOS
-            build_name: yt-downloader
-          - os: ubuntu-latest
-            artifact_name: YT-Downloader-Linux
-            build_name: yt-downloader
-
-    runs-on: ${{ matrix.os }}
+    runs-on: windows-latest
 
     steps:
       - name: Checkout code
@@ -40,48 +27,40 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: Build with PyInstaller (Windows)
-        if: matrix.os == 'windows-latest'
+      - name: Build with PyInstaller
         run: |
-          pyinstaller --noconfirm --onefile --windowed --name "yt-downloader" main.py
-
-      - name: Build with PyInstaller (macOS)
-        if: matrix.os == 'macos-latest'
-        run: |
-          pyinstaller --noconfirm --onefile --windowed --name "yt-downloader" main.py
-
-      - name: Build with PyInstaller (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          pyinstaller --noconfirm --onefile --name "yt-downloader" main.py
-
-      - name: Rename artifact
-        run: |
-          mv dist/${{ matrix.build_name }} dist/${{ matrix.artifact_name }}
-        shell: bash
+          pyinstaller --noconfirm --onefile --windowed --name "YT-Downloader" main.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}
-          path: dist/${{ matrix.artifact_name }}
+          name: YT-Downloader-Windows
+          path: dist/YT-Downloader.exe
 
   release:
     needs: build
     runs-on: ubuntu-latest
     
     steps:
-      - name: Download all artifacts
+      - name: Download artifact
         uses: actions/download-artifact@v4
         with:
+          name: YT-Downloader-Windows
           path: artifacts
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           name: Release ${{ github.ref_name }}
+          body: |
+            ## 📥 Download
+            
+            **Windows**: Download `YT-Downloader.exe` below and run it!
+            
+            ## ✨ What's New
+            - Auto-update yt-dlp when new version available
+            - See full changelog in commits
           files: |
-            artifacts/**/*
-          generate_release_notes: true
+            artifacts/YT-Downloader.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

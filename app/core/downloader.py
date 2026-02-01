@@ -1,15 +1,29 @@
 """
 Downloader - yt-dlp wrapper with playlist support and anti-blocking
+Supports both Python module and external yt-dlp.exe (for frozen apps)
 """
 
 from typing import Callable, Optional, Any
 from pathlib import Path
 import threading
+import subprocess
+import json
+import re
 
 try:
     from yt_dlp import YoutubeDL
 except ImportError:
     YoutubeDL = None
+
+from .updater import is_frozen, get_ytdlp_exe_path
+
+
+def _should_use_external_exe() -> bool:
+    """Check if we should use external yt-dlp.exe instead of bundled module."""
+    if is_frozen():
+        exe_path = get_ytdlp_exe_path()
+        return exe_path.exists()
+    return False
 
 
 class Downloader:
@@ -36,6 +50,10 @@ class Downloader:
         self._video_start_callback: Optional[Callable] = None
         self._is_downloading: bool = False
         self._cancel_requested: bool = False
+        self._current_process: Optional[subprocess.Popen] = None
+        
+        # Check if we should use external exe
+        self._use_external = _should_use_external_exe()
     
     def set_callbacks(
         self,
@@ -67,14 +85,14 @@ class Downloader:
                 "Sec-Fetch-Mode": "navigate",
             },
             # Retry and timeout
-            "retries": 10,
-            "fragment_retries": 10,
+            "retries": 3,
+            "fragment_retries": 3,
             "socket_timeout": 30,
-            "extractor_retries": 5,
-            # Quiet mode
+            "extractor_retries": 2,
+            # Output control
             "quiet": True,
             "no_warnings": True,
-            "ignoreerrors": True,  # Continue on error
+            "ignoreerrors": False,  # Raise exception on error so we can catch it
         }
     
     def _get_options(self, format_str: str = "bv*+ba/b") -> dict:
@@ -150,11 +168,179 @@ class Downloader:
             return f"{hours}:{minutes:02d}:{secs:02d}"
         return f"{minutes}:{secs:02d}"
     
+    # === Subprocess mode methods (for external yt-dlp.exe) ===
+    
+    def _get_exe_path(self) -> str:
+        """Get path to yt-dlp executable."""
+        return str(get_ytdlp_exe_path())
+    
+    def _build_cmd_args(self, url: str, format_str: str, extract_only: bool = False) -> list:
+        """Build command line arguments for yt-dlp."""
+        exe = self._get_exe_path()
+        args = [exe]
+        
+        if extract_only:
+            args.extend(["-j", "--flat-playlist"])
+        else:
+            args.extend([
+                "-f", format_str,
+                "-o", str(self.output_dir / "%(title)s.%(ext)s"),
+                "--merge-output-format", "mp4",
+                "--newline",  # Progress on new lines
+                "--progress-template", "download:%(progress._percent_str)s %(progress._speed_str)s ETA:%(progress._eta_str)s",
+            ])
+        
+        # Common anti-blocking args
+        args.extend([
+            "--user-agent", self.USER_AGENT,
+            "--retries", "10",
+            "--socket-timeout", "30",
+        ])
+        
+        if self.cookies_file:
+            args.extend(["--cookies", self.cookies_file])
+        
+        args.append(url)
+        return args
+    
+    def _parse_progress_line(self, line: str) -> Optional[dict]:
+        """Parse progress output from yt-dlp."""
+        # Format: "download:  45.2% 5.23MiB/s ETA:00:32"
+        if line.startswith("download:"):
+            try:
+                parts = line[9:].strip().split()
+                percent_str = parts[0].replace("%", "").strip()
+                percent = float(percent_str) if percent_str != "N/A" else 0
+                speed = parts[1] if len(parts) > 1 else ""
+                eta = parts[2].replace("ETA:", "") if len(parts) > 2 else ""
+                
+                return {
+                    "status": "downloading",
+                    "percent": percent,
+                    "speed": speed if speed != "N/A" else "",
+                    "eta": eta if eta != "N/A" else "",
+                }
+            except:
+                pass
+        return None
+    
+    def _download_video_subprocess(self, url: str, format_str: str) -> bool:
+        """Download video using subprocess (for frozen mode)."""
+        if self._cancel_requested:
+            return False
+        
+        try:
+            args = self._build_cmd_args(url, format_str)
+            
+            # Start process
+            self._current_process = subprocess.Popen(
+                args,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+            )
+            
+            # Read output line by line
+            for line in self._current_process.stdout:
+                if self._cancel_requested:
+                    self._current_process.terminate()
+                    return False
+                
+                line = line.strip()
+                if not line:
+                    continue
+                
+                # Parse progress
+                progress = self._parse_progress_line(line)
+                if progress and self._progress_callback:
+                    self._progress_callback(progress)
+                
+                # Check for completion
+                if "[Merger]" in line or "has already been downloaded" in line:
+                    if self._progress_callback:
+                        self._progress_callback({"status": "processing", "percent": 100})
+            
+            # Wait for completion
+            return_code = self._current_process.wait()
+            self._current_process = None
+            
+            if return_code == 0:
+                if self._complete_callback:
+                    self._complete_callback("")
+                return True
+            else:
+                if self._error_callback:
+                    self._error_callback(f"Download failed with code {return_code}")
+                return False
+                
+        except Exception as e:
+            if self._error_callback:
+                self._error_callback(str(e))
+            return False
+        finally:
+            self._current_process = None
+    
+    def _get_video_info_subprocess(self, url: str) -> tuple:
+        """Get video info using subprocess (for frozen mode)."""
+        try:
+            args = self._build_cmd_args(url, "", extract_only=True)
+            
+            result = subprocess.run(
+                args,
+                capture_output=True,
+                text=True,
+                timeout=60,
+                creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+            )
+            
+            if result.returncode != 0:
+                return None, result.stderr or "Failed to get video info"
+            
+            # Parse JSON output (each line is a JSON object)
+            lines = result.stdout.strip().split("\n")
+            entries = []
+            
+            for line in lines:
+                if line.strip():
+                    try:
+                        info = json.loads(line)
+                        entries.append(info)
+                    except json.JSONDecodeError:
+                        continue
+            
+            if not entries:
+                return None, "No video info found"
+            
+            if len(entries) == 1:
+                # Single video
+                info = entries[0]
+                info["is_playlist"] = False
+                return info, None
+            else:
+                # Playlist
+                return {
+                    "is_playlist": True,
+                    "title": "Playlist",
+                    "playlist_count": len(entries),
+                    "entries": entries,
+                }, None
+                
+        except subprocess.TimeoutExpired:
+            return None, "Timeout while getting video info"
+        except Exception as e:
+            return None, str(e)
+    
     def get_video_info(self, url: str) -> tuple:
         """
         Extract video/playlist info without downloading.
         Returns (info_dict, error_message). If error, info is None.
         """
+        # Use subprocess mode if external exe available
+        if self._use_external:
+            return self._get_video_info_subprocess(url)
+        
         if not YoutubeDL:
             return None, "yt-dlp not installed"
         
@@ -198,7 +384,9 @@ class Downloader:
         except Exception as e:
             error_msg = str(e)
             # Parse common YouTube errors - check most specific first
-            if "Join this channel" in error_msg:
+            if "403" in error_msg or "Forbidden" in error_msg:
+                error_msg = "HTTP 403 Forbidden - Please update yt-dlp to the latest version"
+            elif "Join this channel" in error_msg:
                 error_msg = "This video requires channel membership"
             elif "Private video" in error_msg or "private video" in error_msg.lower():
                 error_msg = "This video is private"
@@ -234,6 +422,10 @@ class Downloader:
     
     def download_video(self, url: str, format_str: str = "bv*+ba/b") -> bool:
         """Download a single video."""
+        # Use subprocess mode if external exe available
+        if self._use_external:
+            return self._download_video_subprocess(url, format_str)
+        
         if not YoutubeDL:
             if self._error_callback:
                 self._error_callback("yt-dlp not installed")
@@ -291,28 +483,15 @@ class Downloader:
         
         self._is_downloading = False
     
-    def download_playlist_async(self, videos: list[dict], format_str: str = "bv*+ba/b"):
-        """Download playlist in background thread."""
-        thread = threading.Thread(
-            target=self.download_playlist,
-            args=(videos, format_str),
-            daemon=True
-        )
-        thread.start()
-    
-    def download(self, url: str) -> bool:
-        """Download single video (legacy)."""
-        format_str = self._get_format_string()
-        return self.download_video(url, format_str)
-    
-    def download_async(self, url: str):
-        """Download in background thread (legacy)."""
-        thread = threading.Thread(target=self.download, args=(url,), daemon=True)
-        thread.start()
-    
     def cancel(self):
         """Cancel ongoing downloads."""
         self._cancel_requested = True
+        # Terminate subprocess if running
+        if self._current_process:
+            try:
+                self._current_process.terminate()
+            except:
+                pass
     
     @property
     def is_downloading(self) -> bool:

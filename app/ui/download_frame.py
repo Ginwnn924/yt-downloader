@@ -217,7 +217,37 @@ class DownloadFrame(ctk.CTkFrame):
         
         # Show error popup
         from tkinter import messagebox
-        messagebox.showerror("Error", error)
+        
+        # Check if it's a 403 error suggesting yt-dlp update
+        if "403" in error or "Forbidden" in error or "update yt-dlp" in error.lower():
+            result = messagebox.askyesno(
+                "Update Required",
+                "HTTP 403 Forbidden error detected.\n\n"
+                "This usually means yt-dlp needs to be updated.\n\n"
+                "Would you like to update yt-dlp now?",
+                icon="warning"
+            )
+            if result:
+                # Trigger update - find main window and call update
+                self._trigger_update()
+        else:
+            messagebox.showerror("Error", error)
+    
+    def _trigger_update(self):
+        """Trigger yt-dlp update from parent window."""
+        # Walk up parent tree to find MainWindow
+        parent = self.master
+        while parent:
+            if hasattr(parent, 'master') and hasattr(parent.master, 'main'):
+                # Found App, get main window
+                main = parent.master.main
+                if hasattr(main, '_do_update'):
+                    main._do_update()
+                    return
+            if hasattr(parent, '_do_update'):
+                parent._do_update()
+                return
+            parent = getattr(parent, 'master', None)
     
     def _update_download_btn(self):
         if self._pending_count > 0:

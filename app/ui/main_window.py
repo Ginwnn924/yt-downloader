@@ -4,6 +4,7 @@ Main Window - 2-column layout with proper playlist progress tracking
 
 import customtkinter as ctk
 import threading
+from tkinter import messagebox
 from typing import Callable, Optional
 
 from .login_frame import LoginFrame
@@ -11,6 +12,7 @@ from .download_frame import DownloadFrame
 from .progress_frame import ProgressFrame
 from .theme import DARK, LIGHT, font, FONT_SIZE_SM, FONT_SIZE_MD, FONT_SIZE_LG, PAD_SM, PAD_MD, PAD_LG, PAD_XL
 from app.core.downloader import Downloader
+from app.core.updater import get_updater
 
 
 class MainWindow(ctk.CTkFrame):
@@ -56,6 +58,24 @@ class MainWindow(ctk.CTkFrame):
         )
         self.title_lbl.grid(row=0, column=0, padx=PAD_XL, pady=PAD_MD, sticky="w")
         
+        # Update button (hidden by default, shown when update available)
+        self._update_available = False
+        self._latest_version = None
+        
+        self.update_btn = ctk.CTkButton(
+            hdr,
+            text="🔄 Update",
+            width=100,
+            height=36,
+            font=font(FONT_SIZE_SM, bold=True),
+            fg_color="#22c55e",  # Green
+            hover_color="#16a34a",
+            text_color="white",
+            corner_radius=8,
+            command=self._do_update
+        )
+        # Don't grid yet - will be shown when update is available
+        
         self.theme_btn = ctk.CTkButton(
             hdr,
             text="☀️" if self._mode == "dark" else "🌙",
@@ -68,7 +88,7 @@ class MainWindow(ctk.CTkFrame):
             corner_radius=8,
             command=self._toggle_theme
         )
-        self.theme_btn.grid(row=0, column=2, padx=PAD_XL, pady=PAD_MD)
+        self.theme_btn.grid(row=0, column=3, padx=PAD_XL, pady=PAD_MD)
     
     def _build_content(self):
         """2-column content."""
@@ -125,6 +145,64 @@ class MainWindow(ctk.CTkFrame):
         self.download_frame.update_theme(mode)
         self.progress_frame.update_theme(mode)
     
+    # === Update Methods ===
+    
+    def show_update_available(self, latest_version: str):
+        """Show the update button when a new version is available."""
+        self._update_available = True
+        self._latest_version = latest_version
+        self.update_btn.configure(text=f"🔄 v{latest_version}")
+        self.update_btn.grid(row=0, column=2, padx=(0, PAD_SM), pady=PAD_MD)
+    
+    def hide_update_button(self):
+        """Hide the update button."""
+        self._update_available = False
+        self.update_btn.grid_forget()
+    
+    def _do_update(self):
+        """Handle update button click."""
+        self.update_btn.configure(text="Updating...", state="disabled")
+        
+        def on_update_done(success: bool):
+            self._parent.after(0, lambda: self._on_update_complete(success))
+        
+        updater = get_updater()
+        updater.check_and_update_async(callback=on_update_done)
+    
+    def _on_update_complete(self, success: bool):
+        """Handle update completion."""
+        if success:
+            self.hide_update_button()
+            new_version = get_updater().get_installed_version()
+            result = messagebox.askyesno(
+                "Update Successful",
+                f"yt-dlp has been updated to v{new_version}!\n\n"
+                "Please restart the app for changes to take effect.\n\n"
+                "Restart now?",
+                icon="info"
+            )
+            if result:
+                self._restart_app()
+        else:
+            self.update_btn.configure(text="🔄 Retry", state="normal")
+            messagebox.showerror(
+                "Update Failed",
+                "Failed to update yt-dlp.\n\nPlease check your internet connection and try again."
+            )
+    
+    def _restart_app(self):
+        """Restart the application."""
+        import sys
+        import os
+        
+        # Get the executable or script path
+        if getattr(sys, 'frozen', False):
+            # Running as exe
+            os.execl(sys.executable, sys.executable)
+        else:
+            # Running as script
+            os.execl(sys.executable, sys.executable, *sys.argv)
+
     # === Handlers ===
     
     def _login(self):
@@ -288,11 +366,42 @@ class MainWindow(ctk.CTkFrame):
 
         self.progress_frame.complete_download(download_id, success, msg if not success else "")
         
+        # Check for 403 error - show message once and cancel all
+        if not success and ("403" in msg or "Forbidden" in msg):
+            self._handle_403_error()
+        
         if download_id in self._task_context:
             del self._task_context[download_id]
             
         if download_id in self._active_downloaders:
             del self._active_downloaders[download_id]
+    
+    def _handle_403_error(self):
+        """Handle 403 error by showing message and cancelling all downloads."""
+        # Only show once - use a flag
+        if hasattr(self, '_403_shown') and self._403_shown:
+            return
+        self._403_shown = True
+        
+        # Cancel all remaining downloads first
+        for did in list(self._active_downloaders.keys()):
+            if did in self._active_downloaders:
+                self._active_downloaders[did].cancel()
+        
+        # Show message box
+        result = messagebox.askyesno(
+            "Update Required",
+            "HTTP 403 Forbidden error detected.\n\n"
+            "This usually means yt-dlp needs to be updated.\n\n"
+            "Would you like to update yt-dlp now?",
+            icon="warning"
+        )
+        
+        if result:
+            self._do_update()
+        
+        # Reset flag after a delay (allow new errors to show again later)
+        self._parent.after(5000, lambda: setattr(self, '_403_shown', False))
     
     def _cancel_download(self, download_id: str):
         """Cancel specific download."""

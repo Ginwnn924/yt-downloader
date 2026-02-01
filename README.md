@@ -1,19 +1,21 @@
 # YT Downloader
 
-A modern, cross-platform YouTube video downloader with a beautiful dark-themed UI. Built with Python and CustomTkinter.
+A modern YouTube video downloader with a beautiful dark-themed UI. Built with Python and CustomTkinter.
 
 ![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)
-![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)
+![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 
-## Video demo: https://youtu.be/pYwknCUtxqs?si=dU6FLc3j0VPCYnRP
+## 🎬 Video Demo
 
+[![Demo Video](https://img.youtube.com/vi/pYwknCUtxqs/maxresdefault.jpg)](https://youtu.be/pYwknCUtxqs)
 
 ## ✨ Features
 
 - 🎬 **Comprehensive Download Support** - Download YouTube videos, playlists, and member-only videos
 - 🔐 **Login Methods** - Support **Login with Cookie** (Recommended) and **Login with Google**
 - 📊 **Multiple Quality Options** - Choose from available video/audio qualities
+- 🔄 **Auto-Update** - Automatically checks and updates yt-dlp when new version available
 
 ## 📸 Screenshots
 
@@ -29,10 +31,10 @@ A modern, cross-platform YouTube video downloader with a beautiful dark-themed U
 
 ### Option 1: Download Pre-built Binary (Recommended)
 
-Download the latest release for your platform from [Releases](../../releases):
-- **Windows**: `YT-Downloader-Windows.exe`
-- **macOS**: `YT-Downloader-macOS`
-- **Linux**: `YT-Downloader-Linux`
+1. Download `YT-Downloader.exe` from [Releases](../../releases)
+2. Run it - no installation needed!
+
+> **Note**: Windows only. The app will automatically download yt-dlp.exe on first run.
 
 ### Option 2: Run from Source
 
@@ -48,10 +50,10 @@ pip install -r requirements.txt
 python main.py
 ```
 
-### Prerequisites
+### Prerequisites (for running from source)
 
 - Python 3.11 or higher
-- [FFmpeg](https://ffmpeg.org/download.html) (for audio extraction and merging)
+- Windows 10/11
 
 ## 📖 Usage
 
@@ -77,6 +79,13 @@ python main.py
 4. Open YT Downloader -> Login -> **Cookie** tab
 5. Paste the copied cookies and click **Import**
 
+## 🔄 Auto-Update
+
+The app automatically checks for yt-dlp updates on startup:
+- If a new version is available, an **Update** button appears in the header
+- Click it to update yt-dlp without restarting the app
+- Works for both development mode and pre-built exe
+
 ## 🛠️ Tech Stack
 
 - **GUI**: [CustomTkinter](https://github.com/TomSchimansky/CustomTkinter)
@@ -93,7 +102,8 @@ yt-downloader/
 │   ├── app.py             # Main application
 │   ├── core/
 │   │   ├── auth.py        # Authentication manager
-│   │   └── downloader.py  # yt-dlp wrapper
+│   │   ├── downloader.py  # yt-dlp wrapper
+│   │   └── updater.py     # Auto-update manager
 │   └── ui/
 │       ├── theme.py       # Color themes
 │       ├── main_window.py # Main window
@@ -112,7 +122,7 @@ yt-downloader/
 pip install pyinstaller
 
 # Build executable
-pyinstaller --noconfirm --onefile --windowed --name "yt-downloader" main.py
+pyinstaller --noconfirm --onefile --windowed --name "YT-Downloader" main.py
 ```
 
 The executable will be in the `dist/` folder.

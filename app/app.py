@@ -5,6 +5,7 @@ Main Application
 import customtkinter as ctk
 from app.ui.main_window import MainWindow
 from app.ui.theme import DARK, LIGHT, init_fonts
+from app.core.updater import get_updater
 
 
 class App(ctk.CTk):
@@ -30,6 +31,23 @@ class App(ctk.CTk):
         # Main content
         self.main = MainWindow(self, on_theme_toggle=self.toggle_theme)
         self.main.pack(fill="both", expand=True)
+        
+        # Check for yt-dlp updates in background (after UI is ready)
+        self._check_for_updates()
+    
+    def _check_for_updates(self):
+        """Check for yt-dlp updates and notify UI if available."""
+        updater = get_updater()
+        
+        def on_check_complete(has_update: bool, current: str, latest: str):
+            if has_update and latest:
+                print(f"[Updater] New version available: v{latest} (current: v{current})")
+                # Update UI on main thread
+                self.after(0, lambda: self.main.show_update_available(latest))
+            else:
+                print(f"[Updater] yt-dlp is up to date (v{current})")
+        
+        updater.check_update_available_async(on_check_complete)
     
     def _center(self):
         """Center window on screen."""
